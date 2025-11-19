@@ -99,13 +99,58 @@ service cloud.firestore {
           allow write: if isOwner(merchantId, branchId);
         }
         
-        // -------------------- CONFIG (BRANDING) --------------------
+        // -------------------- CONFIG (BRANDING & LOYALTY) --------------------
         match /config/{docId} {
-          // PUBLIC READ: Anyone can see branding
+          // PUBLIC READ: Anyone can see branding & loyalty settings
           allow read: if true;
-          
-          // STAFF WRITE: Only staff can update branding
+
+          // STAFF WRITE: Only staff can update branding & loyalty
           allow write: if isStaff(merchantId, branchId);
+        }
+
+        // -------------------- CUSTOMERS (LOYALTY) --------------------
+        match /customers/{phone} {
+          // READ: Anyone signed in can read customer profiles (for points display)
+          // Staff can read all customer profiles
+          allow read: if isSignedIn();
+
+          // CREATE/UPDATE: Allow system writes for points management
+          // These happen via transactions in loyalty service
+          allow create: if isSignedIn() &&
+            request.resource.data.phone == phone &&
+            request.resource.data.points is int &&
+            request.resource.data.points >= 0 &&
+            request.resource.data.totalSpent is number &&
+            request.resource.data.totalSpent >= 0 &&
+            request.resource.data.orderCount is int &&
+            request.resource.data.orderCount >= 0;
+
+          allow update: if isSignedIn() &&
+            request.resource.data.phone == resource.data.phone &&  // Can't change phone
+            request.resource.data.points is int &&
+            request.resource.data.points >= 0 &&
+            request.resource.data.totalSpent is number &&
+            request.resource.data.totalSpent >= resource.data.totalSpent &&  // Can't decrease
+            request.resource.data.orderCount is int &&
+            request.resource.data.orderCount >= resource.data.orderCount;  // Can't decrease
+
+          // No deletes
+          allow delete: if false;
+        }
+
+        // -------------------- POINTS TRANSACTIONS (AUDIT TRAIL) --------------------
+        match /pointsTransactions/{transactionId} {
+          // READ: Staff can view all transactions
+          allow read: if isStaff(merchantId, branchId);
+
+          // CREATE: Allow system writes for audit trail
+          allow create: if isSignedIn() &&
+            request.resource.data.phone is string &&
+            request.resource.data.type in ['earned', 'redeemed'] &&
+            request.resource.data.points is int;
+
+          // No updates or deletes (immutable audit log)
+          allow update, delete: if false;
         }
       }
     }

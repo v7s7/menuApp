@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -11,12 +12,128 @@ import '../../orders/screens/order_status_page.dart';
 
 import '../../../core/config/app_config.dart';
 
-class CartSheet extends ConsumerWidget {
+// Loyalty system
+import '../../loyalty/data/loyalty_models.dart';
+import '../../loyalty/data/loyalty_service.dart';
+import '../../loyalty/widgets/loyalty_checkout_widget.dart';
+
+class CartSheet extends ConsumerStatefulWidget {
   final VoidCallback? onConfirm;
   const CartSheet({super.key, this.onConfirm});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<CartSheet> createState() => _CartSheetState();
+}
+
+class _CartSheetState extends ConsumerState<CartSheet> {
+  CheckoutData _checkoutData = const CheckoutData(
+    phone: '',
+    carPlate: null,
+    pointsToUse: 0,
+    discount: 0,
+  );
+
+  Future<void> _confirmOrder(BuildContext context, List<CartLine> lines, double subtotal) async {
+    try {
+      // Validate phone number if loyalty is being used
+      final loyaltySettings = await ref.read(loyaltyServiceProvider).getLoyaltySettings();
+      if (loyaltySettings.enabled && _checkoutData.phone.isEmpty) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Please enter your phone number to continue'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
+      }
+
+      // Create order items
+      final items = lines
+          .map((l) => OrderItem(
+                productId: l.sweet.id,
+                name: l.sweet.name,
+                price: l.sweet.price,
+                qty: l.qty,
+                note: l.note,
+              ))
+          .toList();
+
+      final cfg = ref.read(appConfigProvider);
+      final table = cfg.qr.table;
+
+      // Redeem points first (if applicable)
+      if (_checkoutData.pointsToUse > 0 && _checkoutData.phone.isNotEmpty) {
+        final loyaltyService = ref.read(loyaltyServiceProvider);
+        // Note: We'll redeem points after order is created to get the orderId
+      }
+
+      // Create order
+      final service = ref.read(orderServiceProvider);
+      final order = await service.createOrder(
+        items: items,
+        table: table,
+      );
+
+      // Award/redeem points (if applicable)
+      if (loyaltySettings.enabled && _checkoutData.phone.isNotEmpty) {
+        final loyaltyService = ref.read(loyaltyServiceProvider);
+        final finalOrderAmount = subtotal - _checkoutData.discount;
+
+        // Redeem points first (if using)
+        if (_checkoutData.pointsToUse > 0) {
+          try {
+            await loyaltyService.redeemPoints(
+              phone: _checkoutData.phone,
+              pointsToRedeem: _checkoutData.pointsToUse,
+              orderId: order.orderId,
+            );
+          } catch (e) {
+            debugPrint('[Cart] Failed to redeem points: $e');
+            // Continue anyway - order is already created
+          }
+        }
+
+        // Award points for the final order amount (after discount)
+        try {
+          await loyaltyService.awardPoints(
+            phone: _checkoutData.phone,
+            carPlate: _checkoutData.carPlate,
+            orderAmount: finalOrderAmount,
+            orderId: order.orderId,
+          );
+        } catch (e) {
+          debugPrint('[Cart] Failed to award points: $e');
+          // Continue anyway - order is already created
+        }
+      }
+
+      // Navigate to order status
+      if (context.mounted) {
+        Navigator.of(context).maybePop();
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => OrderStatusPage(orderId: order.orderId),
+          ),
+        );
+      }
+
+      widget.onConfirm?.call();
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error creating order: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final cart = ref.watch(cartControllerProvider);
     final sweetsAsync = ref.watch(sweetsStreamProvider);
 
@@ -160,6 +277,18 @@ class CartSheet extends ConsumerWidget {
                   ),
 
                 const SizedBox(height: 16),
+
+                // Loyalty checkout widget
+                LoyaltyCheckoutWidget(
+                  orderTotal: subtotal,
+                  onCheckoutDataChanged: (data) {
+                    setState(() => _checkoutData = data);
+                  },
+                ),
+
+                const SizedBox(height: 16),
+
+                // Subtotal row
                 Row(
                   children: [
                     const Text(
@@ -177,6 +306,49 @@ class CartSheet extends ConsumerWidget {
                     ),
                   ],
                 ),
+
+                // Discount row (if using points)
+                if (_checkoutData.discount > 0) ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      const Text(
+                        'Points Discount',
+                        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: Colors.blue),
+                      ),
+                      const Spacer(),
+                      Text(
+                        '- ${_checkoutData.discount.toStringAsFixed(3)}',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 16,
+                          color: Colors.blue,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  const Divider(),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      const Text(
+                        'Final Total',
+                        style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
+                      ),
+                      const Spacer(),
+                      Text(
+                        (subtotal - _checkoutData.discount).toStringAsFixed(3),
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 20,
+                          color: onSurface,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+
                 const SizedBox(height: 12),
 
                 SizedBox(
@@ -184,39 +356,7 @@ class CartSheet extends ConsumerWidget {
                   child: ElevatedButton.icon(
                     onPressed: lines.isEmpty
                         ? null
-                        : () async {
-                            // One OrderItem per line, preserve note
-                            final items = lines
-                                .map((l) => OrderItem(
-                                      productId: l.sweet.id,
-                                      name: l.sweet.name,
-                                      price: l.sweet.price,
-                                      qty: l.qty,
-                                      note: l.note, // keep per-line note
-                                    ))
-                                .toList();
-
-                            final cfg = ref.read(appConfigProvider);
-                            final table = cfg.qr.table;
-
-                            final service = ref.read(orderServiceProvider);
-                            final order = await service.createOrder(
-                              items: items,
-                              table: table,
-                            );
-
-                            // ignore: use_build_context_synchronously
-                            Navigator.of(context).maybePop();
-                            // ignore: use_build_context_synchronously
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) =>
-                                    OrderStatusPage(orderId: order.orderId),
-                              ),
-                            );
-
-                            onConfirm?.call();
-                          },
+                        : () async => _confirmOrder(context, lines, subtotal),
                     icon: const Icon(Icons.check_circle_outline),
                     label: const Text('Confirm Order'),
                     style: _confirmStyle,
