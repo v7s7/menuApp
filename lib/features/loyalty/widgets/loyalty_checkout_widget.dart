@@ -140,14 +140,15 @@ class _LoyaltyCheckoutWidgetState extends ConsumerState<LoyaltyCheckoutWidget> {
                 border: OutlineInputBorder(),
               ),
               textCapitalization: TextCapitalization.characters,
+              maxLength: 7, // Max 7 digits as per user requirement
               onChanged: (value) {
                 ref.read(checkoutCarPlateProvider.notifier).state = value;
                 _updateCheckoutData(settings);
               },
             ),
 
-            // Show loyalty profile if enabled AND phone+car plate entered
-            if (settings.enabled && _phoneNumberController.text.isNotEmpty && _carPlateController.text.isNotEmpty) ...[
+            // Always show loyalty profile if enabled (appears at bottom immediately)
+            if (settings.enabled) ...[
               const SizedBox(height: 16),
               _buildCustomerProfileCard(settings),
             ],
@@ -159,7 +160,31 @@ class _LoyaltyCheckoutWidgetState extends ConsumerState<LoyaltyCheckoutWidget> {
 
   Widget _buildCustomerProfileCard(LoyaltySettings settings) {
     final phone = '${_countryCodeController.text}${_phoneNumberController.text}'.trim();
-    if (phone.isEmpty || _phoneNumberController.text.isEmpty) return const SizedBox();
+
+    // Show placeholder message if phone is not entered yet
+    if (phone.isEmpty || _phoneNumberController.text.isEmpty) {
+      return Card(
+        color: Colors.purple.withOpacity(0.05),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Icon(Icons.stars, color: Colors.purple.withOpacity(0.5), size: 32),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Enter your phone number to see your loyalty points',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey[600],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
 
     final profileAsync = ref.watch(customerProfileProvider(phone));
 

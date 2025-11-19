@@ -703,6 +703,44 @@ class _OrderTile extends ConsumerWidget {
                             ],
                           ),
                         ],
+                        // Loyalty Points Usage
+                        if (o.loyaltyPointsUsed != null && o.loyaltyPointsUsed! > 0) ...[
+                          const SizedBox(height: 12),
+                          const Divider(),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Icon(Icons.stars, size: 16, color: Colors.purple.withOpacity(0.8)),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Used ${o.loyaltyPointsUsed} loyalty points',
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.purple,
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (o.loyaltyDiscount != null && o.loyaltyDiscount! > 0) ...[
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                const SizedBox(width: 24), // Indent to align with text
+                                Icon(Icons.discount, size: 14, color: Colors.green.withOpacity(0.8)),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'Discount: ${o.loyaltyDiscount!.toStringAsFixed(3)} BHD',
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.green,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ],
                       ],
                     ),
                   ),

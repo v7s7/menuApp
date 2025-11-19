@@ -98,7 +98,7 @@ class OrderStatusPage extends ConsumerWidget {
             style: TextStyle(
               fontSize: 32,
               fontWeight: FontWeight.w900,
-              color: cs.primary,
+              color: cs.onSurface, // Uses theme's secondary color
               letterSpacing: 1.5,
             ),
           ),
@@ -108,21 +108,21 @@ class OrderStatusPage extends ConsumerWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
             decoration: BoxDecoration(
-              color: cs.primaryContainer,
+              color: cs.onSurface.withOpacity(0.1),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: cs.primary, width: 2),
+              border: Border.all(color: cs.onSurface.withOpacity(0.3), width: 2),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.directions_car, color: cs.onPrimaryContainer, size: 24),
+                Icon(Icons.directions_car, color: cs.onSurface, size: 24),
                 const SizedBox(width: 8),
                 Text(
                   order.customerCarPlate ?? 'N/A',
                   style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.w800,
-                    color: cs.onPrimaryContainer,
+                    color: cs.onSurface, // Uses theme's secondary color
                     letterSpacing: 2,
                   ),
                 ),
@@ -159,7 +159,7 @@ class OrderStatusPage extends ConsumerWidget {
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w800,
-                        color: cs.onSurface,
+                        color: cs.onSurface, // Uses theme's secondary color
                       ),
                     ),
                     Text(
@@ -167,7 +167,7 @@ class OrderStatusPage extends ConsumerWidget {
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.w900,
-                        color: cs.primary,
+                        color: cs.onSurface, // Uses theme's secondary color
                       ),
                     ),
                   ],
@@ -189,13 +189,13 @@ class OrderStatusPage extends ConsumerWidget {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
-                            color: cs.primary,
+                            color: cs.onSurface.withOpacity(0.15),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
                             'x${item.qty}',
                             style: TextStyle(
-                              color: cs.onPrimary,
+                              color: cs.onSurface, // Uses theme's secondary color
                               fontWeight: FontWeight.w800,
                               fontSize: 14,
                             ),
@@ -224,7 +224,7 @@ class OrderStatusPage extends ConsumerWidget {
                                   ),
                                   child: Row(
                                     children: [
-                                      Icon(Icons.note, size: 16, color: cs.primary),
+                                      Icon(Icons.note, size: 16, color: cs.onSurface),
                                       const SizedBox(width: 6),
                                       Expanded(
                                         child: Text(
