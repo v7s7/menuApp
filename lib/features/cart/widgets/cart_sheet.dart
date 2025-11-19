@@ -35,32 +35,32 @@ class _CartSheetState extends ConsumerState<CartSheet> {
 
   Future<void> _confirmOrder(BuildContext context, List<CartLine> lines, double subtotal) async {
     try {
-      // Validate phone number and car plate if loyalty is enabled
-      final loyaltySettings = await ref.read(loyaltyServiceProvider).getLoyaltySettings();
-      if (loyaltySettings.enabled) {
-        if (_checkoutData.phone.isEmpty) {
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Please enter your phone number to continue'),
-                backgroundColor: Colors.orange,
-              ),
-            );
-          }
-          return;
+      // ALWAYS validate phone number and car plate (for car identification)
+      if (_checkoutData.phone.isEmpty) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Please enter your phone number to continue'),
+              backgroundColor: Colors.orange,
+            ),
+          );
         }
-        if (_checkoutData.carPlate.isEmpty) {
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Please enter your car plate to continue'),
-                backgroundColor: Colors.orange,
-              ),
-            );
-          }
-          return;
-        }
+        return;
       }
+      if (_checkoutData.carPlate.isEmpty) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Please enter your car plate to continue'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
+      }
+
+      // Get loyalty settings to check if we need to process loyalty
+      final loyaltySettings = await ref.read(loyaltyServiceProvider).getLoyaltySettings();
 
       // Create order items
       final items = lines
@@ -76,13 +76,13 @@ class _CartSheetState extends ConsumerState<CartSheet> {
       final cfg = ref.read(appConfigProvider);
       final table = cfg.qr.table;
 
-      // Create order (with loyalty info if applicable)
+      // Create order (ALWAYS include phone and car plate for identification)
       final service = ref.read(orderServiceProvider);
       final order = await service.createOrder(
         items: items,
         table: table,
-        customerPhone: loyaltySettings.enabled ? _checkoutData.phone : null,
-        customerCarPlate: loyaltySettings.enabled ? _checkoutData.carPlate : null,
+        customerPhone: _checkoutData.phone,
+        customerCarPlate: _checkoutData.carPlate,
         loyaltyDiscount: loyaltySettings.enabled ? _checkoutData.discount : null,
         loyaltyPointsUsed: loyaltySettings.enabled ? _checkoutData.pointsToUse : null,
       );

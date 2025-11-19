@@ -51,18 +51,18 @@ class _LoyaltyCheckoutWidgetState extends ConsumerState<LoyaltyCheckoutWidget> {
       loading: () => const SizedBox(),
       error: (e, st) => const SizedBox(),
       data: (settings) {
-        if (!settings.enabled) return const SizedBox();
-
+        // ALWAYS show phone and car plate (for car identification)
+        // Only show loyalty points section if enabled
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Divider(height: 32),
             Row(
               children: [
-                const Icon(Icons.card_giftcard, color: Colors.purple),
+                Icon(Icons.directions_car, color: settings.enabled ? Colors.purple : Colors.grey),
                 const SizedBox(width: 8),
                 Text(
-                  'Loyalty Program',
+                  settings.enabled ? 'Customer Info & Loyalty' : 'Customer Info',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
@@ -71,7 +71,7 @@ class _LoyaltyCheckoutWidgetState extends ConsumerState<LoyaltyCheckoutWidget> {
             ),
             const SizedBox(height: 16),
 
-            // Phone Number Input
+            // Phone Number Input (ALWAYS REQUIRED)
             TextField(
               controller: _phoneController,
               decoration: const InputDecoration(
@@ -104,8 +104,8 @@ class _LoyaltyCheckoutWidgetState extends ConsumerState<LoyaltyCheckoutWidget> {
               },
             ),
 
-            // Show customer profile if phone and car plate are entered
-            if (_phoneController.text.isNotEmpty && _carPlateController.text.isNotEmpty) ...[
+            // Show loyalty profile if enabled AND phone+car plate entered
+            if (settings.enabled && _phoneController.text.isNotEmpty && _carPlateController.text.isNotEmpty) ...[
               const SizedBox(height: 16),
               _buildCustomerProfileCard(settings),
             ],

@@ -49,6 +49,25 @@ extension OrdersFilterX on OrdersFilter {
 final ordersFilterProvider =
     StateProvider<OrdersFilter>((_) => OrdersFilter.all);
 
+/// ===== Date range for filtering =====
+class DateRangeFilter {
+  final DateTime start;
+  final DateTime end;
+
+  DateRangeFilter({required this.start, required this.end});
+
+  // Today only (default)
+  factory DateRangeFilter.today() {
+    final now = DateTime.now();
+    final start = DateTime(now.year, now.month, now.day, 0, 0, 0);
+    final end = DateTime(now.year, now.month, now.day, 23, 59, 59);
+    return DateRangeFilter(start: start, end: end);
+  }
+}
+
+final dateRangeFilterProvider =
+    StateProvider<DateRangeFilter>((_) => DateRangeFilter.today());
+
 /// ===== Lightweight admin models =====
 class _AdminOrder {
   final String id;
@@ -99,6 +118,7 @@ final ordersStreamProvider =
     StreamProvider.autoDispose<List<_AdminOrder>>((ref) {
   final m = ref.watch(merchantIdProvider);
   final b = ref.watch(branchIdProvider);
+  final dateRange = ref.watch(dateRangeFilterProvider);
 
   final col = FirebaseFirestore.instance
       .collection('merchants')
@@ -106,6 +126,8 @@ final ordersStreamProvider =
       .collection('branches')
       .doc(b)
       .collection('orders')
+      .where('createdAt', isGreaterThanOrEqualTo: Timestamp.fromDate(dateRange.start))
+      .where('createdAt', isLessThanOrEqualTo: Timestamp.fromDate(dateRange.end))
       .orderBy('createdAt', descending: true)
       .limit(200);
 
@@ -218,6 +240,23 @@ String _label(om.OrderStatus s) {
   }
 }
 
+String _formatDateRange(DateRangeFilter range) {
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final rangeStart = DateTime(range.start.year, range.start.month, range.start.day);
+
+  // Check if it's today only
+  if (rangeStart.isAtSameMomentAs(today) &&
+      range.start.day == range.end.day &&
+      range.start.month == range.end.month &&
+      range.start.year == range.end.year) {
+    return 'Today';
+  }
+
+  // Format as date range
+  return '${range.start.month}/${range.start.day} - ${range.end.month}/${range.end.day}';
+}
+
 /// ===== Page =====
 class OrdersAdminPage extends ConsumerWidget {
   const OrdersAdminPage({super.key});
@@ -226,12 +265,57 @@ class OrdersAdminPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(ordersStreamProvider);
     final selected = ref.watch(ordersFilterProvider);
+    final dateRange = ref.watch(dateRangeFilterProvider);
     final onSurface = Theme.of(context).colorScheme.onSurface;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Orders'),
         centerTitle: true,
+        actions: [
+          // Date range picker
+          IconButton(
+            icon: const Icon(Icons.calendar_today),
+            tooltip: _formatDateRange(dateRange),
+            onPressed: () async {
+              final picked = await showDateRangePicker(
+                context: context,
+                firstDate: DateTime.now().subtract(const Duration(days: 365)),
+                lastDate: DateTime.now().add(const Duration(days: 1)),
+                initialDateRange: DateTimeRange(
+                  start: dateRange.start,
+                  end: dateRange.end,
+                ),
+                builder: (context, child) {
+                  return Column(
+                    children: [
+                      Expanded(child: child!),
+                      Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: TextButton.icon(
+                          icon: const Icon(Icons.today),
+                          label: const Text('Today Only'),
+                          onPressed: () {
+                            Navigator.pop(context, DateTimeRange(
+                              start: DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day),
+                              end: DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day, 23, 59, 59),
+                            ));
+                          },
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              );
+              if (picked != null) {
+                ref.read(dateRangeFilterProvider.notifier).state = DateRangeFilter(
+                  start: DateTime(picked.start.year, picked.start.month, picked.start.day, 0, 0, 0),
+                  end: DateTime(picked.end.year, picked.end.month, picked.end.day, 23, 59, 59),
+                );
+              }
+            },
+          ),
+        ],
       ),
       body: Column(
         children: [
@@ -248,11 +332,14 @@ class OrdersAdminPage extends ConsumerWidget {
                 ),
               ),
               data: (all) {
-                // “All” excludes cancelled
+                // "All" excludes served and cancelled (only active orders)
                 final f = selected.statusString;
                 final list = (f == null)
                     ? all
-                        .where((o) => o.status != om.OrderStatus.cancelled)
+                        .where((o) =>
+                          o.status != om.OrderStatus.served &&
+                          o.status != om.OrderStatus.cancelled
+                        )
                         .toList()
                     : all.where((o) => _toFirestore(o.status) == f).toList();
 
