@@ -77,7 +77,7 @@ class LoyaltySettings {
 
   factory LoyaltySettings.fromMap(Map<String, dynamic> map) {
     return LoyaltySettings(
-      enabled: (map['enabled'] as bool?) ?? true,
+      enabled: (map['enabled'] as bool?) ?? false,
       earnRate: (map['earnRate'] as num?)?.toInt() ?? 10,
       redeemRate: (map['redeemRate'] as num?)?.toInt() ?? 50,
       minOrderAmount: ((map['minOrderAmount'] as num?) ?? 5).toDouble(),
@@ -96,7 +96,7 @@ class LoyaltySettings {
       };
 
   factory LoyaltySettings.defaultSettings() => const LoyaltySettings(
-        enabled: true,
+        enabled: false, // Disabled by default - merchant must enable
         earnRate: 10, // 10 points per 1 BHD
         redeemRate: 50, // 50 points = 1 BHD discount
         minOrderAmount: 5.0, // 5 BHD minimum

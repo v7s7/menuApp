@@ -38,6 +38,10 @@ class OrderService {
   Future<om.Order> createOrder({
     required List<om.OrderItem> items,
     String? table,
+    String? customerPhone,
+    String? customerCarPlate,
+    double? loyaltyDiscount,
+    int? loyaltyPointsUsed,
   }) async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) {
@@ -85,6 +89,11 @@ class OrderService {
       'currency': 'BHD',
       'table': table,
       'createdAt': FieldValue.serverTimestamp(),
+      // Loyalty fields (optional)
+      if (customerPhone != null) 'customerPhone': customerPhone,
+      if (customerCarPlate != null) 'customerCarPlate': customerCarPlate,
+      if (loyaltyDiscount != null) 'loyaltyDiscount': loyaltyDiscount,
+      if (loyaltyPointsUsed != null) 'loyaltyPointsUsed': loyaltyPointsUsed,
       // 'orderNo' optional
     });
 
@@ -96,6 +105,10 @@ class OrderService {
       items: items,
       subtotal: subtotal,
       table: table,
+      customerPhone: customerPhone,
+      customerCarPlate: customerCarPlate,
+      loyaltyDiscount: loyaltyDiscount,
+      loyaltyPointsUsed: loyaltyPointsUsed,
     );
     } catch (e, st) {
       if (kDebugMode) {
@@ -135,6 +148,10 @@ class OrderService {
         items: itemsList,
         subtotal: double.parse(subtotalNum.toStringAsFixed(3)),
         table: _asNullableString(data['table']),
+        customerPhone: _asNullableString(data['customerPhone']),
+        customerCarPlate: _asNullableString(data['customerCarPlate']),
+        loyaltyDiscount: data['loyaltyDiscount'] != null ? _asNum(data['loyaltyDiscount']).toDouble() : null,
+        loyaltyPointsUsed: data['loyaltyPointsUsed'] != null ? _asNum(data['loyaltyPointsUsed']).toInt() : null,
       );
     });
   }

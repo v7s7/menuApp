@@ -76,51 +76,33 @@ class _CartSheetState extends ConsumerState<CartSheet> {
       final cfg = ref.read(appConfigProvider);
       final table = cfg.qr.table;
 
-      // Redeem points first (if applicable)
-      if (_checkoutData.pointsToUse > 0 && _checkoutData.phone.isNotEmpty) {
-        final loyaltyService = ref.read(loyaltyServiceProvider);
-        // Note: We'll redeem points after order is created to get the orderId
-      }
-
-      // Create order
+      // Create order (with loyalty info if applicable)
       final service = ref.read(orderServiceProvider);
       final order = await service.createOrder(
         items: items,
         table: table,
+        customerPhone: loyaltySettings.enabled ? _checkoutData.phone : null,
+        customerCarPlate: loyaltySettings.enabled ? _checkoutData.carPlate : null,
+        loyaltyDiscount: loyaltySettings.enabled ? _checkoutData.discount : null,
+        loyaltyPointsUsed: loyaltySettings.enabled ? _checkoutData.pointsToUse : null,
       );
 
-      // Award/redeem points (if applicable)
-      if (loyaltySettings.enabled && _checkoutData.phone.isNotEmpty) {
+      // Redeem points (if using points for discount)
+      if (loyaltySettings.enabled && _checkoutData.pointsToUse > 0 && _checkoutData.phone.isNotEmpty) {
         final loyaltyService = ref.read(loyaltyServiceProvider);
-        final finalOrderAmount = subtotal - _checkoutData.discount;
-
-        // Redeem points first (if using)
-        if (_checkoutData.pointsToUse > 0) {
-          try {
-            await loyaltyService.redeemPoints(
-              phone: _checkoutData.phone,
-              pointsToRedeem: _checkoutData.pointsToUse,
-              orderId: order.orderId,
-            );
-          } catch (e) {
-            debugPrint('[Cart] Failed to redeem points: $e');
-            // Continue anyway - order is already created
-          }
-        }
-
-        // Award points for the final order amount (after discount)
         try {
-          await loyaltyService.awardPoints(
+          await loyaltyService.redeemPoints(
             phone: _checkoutData.phone,
-            carPlate: _checkoutData.carPlate,
-            orderAmount: finalOrderAmount,
+            pointsToRedeem: _checkoutData.pointsToUse,
             orderId: order.orderId,
           );
         } catch (e) {
-          debugPrint('[Cart] Failed to award points: $e');
+          debugPrint('[Cart] Failed to redeem points: $e');
           // Continue anyway - order is already created
         }
       }
+
+      // NOTE: Points are awarded when order is marked as 'served' in merchant dashboard
 
       // Navigate to order status
       if (context.mounted) {

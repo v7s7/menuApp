@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/branding/branding_providers.dart';
 import '../../features/orders/data/order_models.dart' as om;
+import '../../features/loyalty/data/loyalty_service.dart';
 
 /// ===== Filters =====
 enum OrdersFilter { all, pending, preparing, ready, served, cancelled }
@@ -58,6 +59,12 @@ class _AdminOrder {
   final double subtotal;
   final String? table;
 
+  // Loyalty fields
+  final String? customerPhone;
+  final String? customerCarPlate;
+  final double? loyaltyDiscount;
+  final int? loyaltyPointsUsed;
+
   _AdminOrder({
     required this.id,
     required this.orderNo,
@@ -66,6 +73,10 @@ class _AdminOrder {
     required this.items,
     required this.subtotal,
     this.table,
+    this.customerPhone,
+    this.customerCarPlate,
+    this.loyaltyDiscount,
+    this.loyaltyPointsUsed,
   });
 }
 
@@ -124,6 +135,18 @@ final ordersStreamProvider =
           ? (data['subtotal'] as num).toDouble()
           : double.tryParse('${data['subtotal']}') ?? 0.0;
 
+      final loyaltyDiscount = data['loyaltyDiscount'] != null
+          ? ((data['loyaltyDiscount'] is num)
+              ? (data['loyaltyDiscount'] as num).toDouble()
+              : double.tryParse('${data['loyaltyDiscount']}') ?? 0.0)
+          : null;
+
+      final loyaltyPointsUsed = data['loyaltyPointsUsed'] != null
+          ? ((data['loyaltyPointsUsed'] is num)
+              ? (data['loyaltyPointsUsed'] as num).toInt()
+              : int.tryParse('${data['loyaltyPointsUsed']}') ?? 0)
+          : null;
+
       return _AdminOrder(
         id: d.id,
         orderNo: (data['orderNo'] ?? '—').toString(),
@@ -132,6 +155,10 @@ final ordersStreamProvider =
         items: items,
         subtotal: double.parse(subtotal.toStringAsFixed(3)),
         table: (data['table'] as String?)?.trim(),
+        customerPhone: (data['customerPhone'] as String?)?.trim(),
+        customerCarPlate: (data['customerCarPlate'] as String?)?.trim(),
+        loyaltyDiscount: loyaltyDiscount,
+        loyaltyPointsUsed: loyaltyPointsUsed,
       );
     }).toList();
   });
@@ -693,6 +720,29 @@ class _StatusChangerState extends ConsumerState<_StatusChanger> {
       }
 
       await doc.update(payload);
+
+      // Award loyalty points when order is marked as served
+      if (newStatus == om.OrderStatus.served) {
+        final order = widget.order;
+        if (order.customerPhone != null && order.customerPhone!.isNotEmpty &&
+            order.customerCarPlate != null && order.customerCarPlate!.isNotEmpty) {
+          try {
+            final loyaltyService = ref.read(loyaltyServiceProvider);
+            // Final amount = subtotal - discount
+            final finalAmount = order.subtotal - (order.loyaltyDiscount ?? 0.0);
+
+            await loyaltyService.awardPoints(
+              phone: order.customerPhone!,
+              carPlate: order.customerCarPlate!,
+              orderAmount: finalAmount,
+              orderId: order.id,
+            );
+          } catch (e) {
+            debugPrint('[OrdersAdmin] Failed to award loyalty points: $e');
+            // Don't block the status update if points awarding fails
+          }
+        }
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
