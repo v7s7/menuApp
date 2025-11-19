@@ -465,7 +465,7 @@ class CustomersListPage extends ConsumerWidget {
                 ),
                 title: Text(customer.phone),
                 subtitle: Text(
-                  '${customer.carPlate ?? "No car plate"} • ${customer.orderCount} orders • BHD ${customer.totalSpent.toStringAsFixed(3)} spent',
+                  '${customer.carPlate} • ${customer.orderCount} orders • BHD ${customer.totalSpent.toStringAsFixed(3)} spent',
                 ),
                 trailing: Column(
                   mainAxisAlignment: MainAxisAlignment.center,

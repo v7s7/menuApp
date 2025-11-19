@@ -124,7 +124,7 @@ class LoyaltyService {
   /// Award points for an order (called after order creation)
   Future<void> awardPoints({
     required String phone,
-    String? carPlate,
+    required String carPlate,
     required double orderAmount,
     required String orderId,
   }) async {
@@ -136,6 +136,8 @@ class LoyaltyService {
       if (pointsEarned <= 0) return;
 
       final normalizedPhone = _normalizePhone(phone);
+      final normalizedCarPlate = carPlate.trim().toUpperCase();
+
       final customerRef = _fs
           .collection('merchants')
           .doc(_m)
@@ -151,7 +153,7 @@ class LoyaltyService {
           // Update existing customer
           final current = CustomerProfile.fromMap(customerDoc.data()!);
           final updated = current.copyWith(
-            carPlate: carPlate?.trim().isNotEmpty == true ? carPlate!.trim() : current.carPlate,
+            carPlate: normalizedCarPlate,
             points: current.points + pointsEarned,
             totalSpent: current.totalSpent + orderAmount,
             orderCount: current.orderCount + 1,
@@ -162,7 +164,7 @@ class LoyaltyService {
           // Create new customer
           final newCustomer = CustomerProfile(
             phone: normalizedPhone,
-            carPlate: carPlate?.trim(),
+            carPlate: normalizedCarPlate,
             points: pointsEarned,
             totalSpent: orderAmount,
             orderCount: 1,

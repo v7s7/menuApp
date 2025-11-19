@@ -88,11 +88,11 @@ class _LoyaltyCheckoutWidgetState extends ConsumerState<LoyaltyCheckoutWidget> {
             ),
             const SizedBox(height: 12),
 
-            // Car Plate Input (Optional)
+            // Car Plate Input (Required)
             TextField(
               controller: _carPlateController,
               decoration: const InputDecoration(
-                labelText: 'Car Plate (Optional)',
+                labelText: 'Car Plate',
                 hintText: 'e.g., 12345',
                 prefixIcon: Icon(Icons.directions_car),
                 border: OutlineInputBorder(),
@@ -104,8 +104,8 @@ class _LoyaltyCheckoutWidgetState extends ConsumerState<LoyaltyCheckoutWidget> {
               },
             ),
 
-            // Show customer profile if phone is entered
-            if (_phoneController.text.isNotEmpty) ...[
+            // Show customer profile if phone and car plate are entered
+            if (_phoneController.text.isNotEmpty && _carPlateController.text.isNotEmpty) ...[
               const SizedBox(height: 16),
               _buildCustomerProfileCard(settings),
             ],
@@ -405,7 +405,7 @@ class _LoyaltyCheckoutWidgetState extends ConsumerState<LoyaltyCheckoutWidget> {
 
     final checkoutData = CheckoutData(
       phone: phone,
-      carPlate: carPlate.isNotEmpty ? carPlate : null,
+      carPlate: carPlate,
       pointsToUse: pointsToUse,
       discount: discount,
     );

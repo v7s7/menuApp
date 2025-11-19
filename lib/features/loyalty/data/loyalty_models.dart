@@ -2,8 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 /// Customer profile with loyalty points
 class CustomerProfile {
-  final String phone; // Primary identifier
-  final String? carPlate; // Secondary identifier
+  final String phone; // Primary identifier (for loyalty points)
+  final String carPlate; // Car plate (for restaurant to identify customer)
   final int points; // Current points balance
   final double totalSpent; // Lifetime spending (BHD)
   final int orderCount; // Total orders placed
@@ -11,7 +11,7 @@ class CustomerProfile {
 
   const CustomerProfile({
     required this.phone,
-    this.carPlate,
+    required this.carPlate,
     required this.points,
     required this.totalSpent,
     required this.orderCount,
@@ -21,7 +21,7 @@ class CustomerProfile {
   factory CustomerProfile.fromMap(Map<String, dynamic> map) {
     return CustomerProfile(
       phone: (map['phone'] as String?) ?? '',
-      carPlate: (map['carPlate'] as String?)?.trim(),
+      carPlate: ((map['carPlate'] as String?) ?? '').trim(),
       points: (map['points'] as num?)?.toInt() ?? 0,
       totalSpent: ((map['totalSpent'] as num?) ?? 0).toDouble(),
       orderCount: (map['orderCount'] as num?)?.toInt() ?? 0,
@@ -206,13 +206,13 @@ class PointsTransaction {
 /// Checkout data with loyalty information
 class CheckoutData {
   final String phone;
-  final String? carPlate;
+  final String carPlate;
   final int pointsToUse; // Points customer wants to redeem
   final double discount; // Calculated discount from points
 
   const CheckoutData({
     required this.phone,
-    this.carPlate,
+    required this.carPlate,
     required this.pointsToUse,
     required this.discount,
   });

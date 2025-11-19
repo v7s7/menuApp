@@ -28,25 +28,38 @@ class CartSheet extends ConsumerStatefulWidget {
 class _CartSheetState extends ConsumerState<CartSheet> {
   CheckoutData _checkoutData = const CheckoutData(
     phone: '',
-    carPlate: null,
+    carPlate: '',
     pointsToUse: 0,
     discount: 0,
   );
 
   Future<void> _confirmOrder(BuildContext context, List<CartLine> lines, double subtotal) async {
     try {
-      // Validate phone number if loyalty is being used
+      // Validate phone number and car plate if loyalty is enabled
       final loyaltySettings = await ref.read(loyaltyServiceProvider).getLoyaltySettings();
-      if (loyaltySettings.enabled && _checkoutData.phone.isEmpty) {
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Please enter your phone number to continue'),
-              backgroundColor: Colors.orange,
-            ),
-          );
+      if (loyaltySettings.enabled) {
+        if (_checkoutData.phone.isEmpty) {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Please enter your phone number to continue'),
+                backgroundColor: Colors.orange,
+              ),
+            );
+          }
+          return;
         }
-        return;
+        if (_checkoutData.carPlate.isEmpty) {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Please enter your car plate to continue'),
+                backgroundColor: Colors.orange,
+              ),
+            );
+          }
+          return;
+        }
       }
 
       // Create order items
