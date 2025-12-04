@@ -1,4 +1,5 @@
 // lib/merchant/main_merchant.dart — FIXED: Unified Firebase init (web + mobile) + Orders tab
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
