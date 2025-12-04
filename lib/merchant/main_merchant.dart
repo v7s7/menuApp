@@ -20,6 +20,7 @@ import '../core/services/order_notification_service.dart';
 import 'screens/login_screen.dart';
 import 'screens/products_screen.dart';
 import 'screens/orders_admin_page.dart';
+import 'screens/settings_page.dart';
 import '../features/analytics/screens/analytics_dashboard_page.dart';
 
 Future<void> main() async {
@@ -191,7 +192,7 @@ class _MerchantShellState extends ConsumerState<_MerchantShell> {
                   onPressed: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
-                        builder: (_) => const SettingsPage(),
+                        builder: (_) => SettingsPage(),
                       ),
                     );
                   },
