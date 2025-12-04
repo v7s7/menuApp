@@ -24,6 +24,7 @@ class _CategoryAdminPageState extends ConsumerState<CategoryAdminPage> {
 
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: false,
         title: Text(
           _activeParent == null ? 'Categories' : 'Subcategories',
           style: TextStyle(color: onSurface, fontWeight: FontWeight.w800),

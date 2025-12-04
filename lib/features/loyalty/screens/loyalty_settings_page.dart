@@ -51,6 +51,7 @@ class _LoyaltySettingsPageState extends ConsumerState<LoyaltySettingsPage> {
 
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: false,
         title: const Text('Loyalty Program Settings'),
         actions: [
           IconButton(
@@ -433,7 +434,12 @@ class CustomersListPage extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: false,
         title: const Text('Loyalty Customers'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.pop(context),
+        ),
       ),
       body: customersAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),

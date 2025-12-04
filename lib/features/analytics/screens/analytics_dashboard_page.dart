@@ -25,6 +25,7 @@ class AnalyticsDashboardPage extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: false,
         title: const Text('Analytics Dashboard'),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(60),

@@ -270,6 +270,7 @@ class OrdersAdminPage extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: false,
         title: const Text('Orders'),
         centerTitle: true,
         actions: [
