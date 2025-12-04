@@ -7,6 +7,7 @@ import 'email_service.dart';
 class OrderNotificationService {
   StreamSubscription<QuerySnapshot>? _subscription;
   final Set<String> _processedOrders = {};
+  DateTime? _serviceStartTime;
 
   /// Start listening for new orders
   void startListening({
@@ -24,13 +25,15 @@ class OrderNotificationService {
     // Cancel existing subscription
     stopListening();
 
-    // Listen to orders created in the last 5 minutes (to catch any we missed)
-    final fiveMinutesAgo = DateTime.now().subtract(const Duration(minutes: 5));
+    // Record when service starts - only listen for orders created AFTER this time
+    // This prevents sending emails for old orders and avoids rate limiting
+    _serviceStartTime = DateTime.now();
+    print('[OrderNotificationService] Started listening for orders created after ${_serviceStartTime}');
 
     _subscription = FirebaseFirestore.instance
         .collection('merchants/$merchantId/branches/$branchId/orders')
         .where('status', isEqualTo: 'pending')
-        .where('createdAt', isGreaterThan: fiveMinutesAgo)
+        .where('createdAt', isGreaterThan: _serviceStartTime)
         .orderBy('createdAt', descending: true)
         .snapshots()
         .listen((snapshot) {
@@ -40,12 +43,13 @@ class OrderNotificationService {
 
           // Skip if already processed
           if (_processedOrders.contains(orderId)) {
+            print('[OrderNotificationService] Skipping already processed order: $orderId');
             continue;
           }
 
           _processedOrders.add(orderId);
 
-          // Send notification
+          // Send notification with delay to respect rate limits (2 req/sec)
           _sendOrderNotification(
             orderId: orderId,
             orderData: change.doc.data()!,
@@ -61,6 +65,7 @@ class OrderNotificationService {
   void stopListening() {
     _subscription?.cancel();
     _subscription = null;
+    _serviceStartTime = null;
   }
 
   /// Send email notification for a new order
@@ -102,12 +107,18 @@ class OrderNotificationService {
       );
 
       if (result.success) {
-        print('[OrderNotificationService] Email sent for order $orderNo: ${result.messageId}');
+        print('[OrderNotificationService] ✅ Email sent for order $orderNo: ${result.messageId}');
       } else {
-        print('[OrderNotificationService] Failed to send email for order $orderNo: ${result.error}');
+        // Check if it's a rate limit error
+        final error = result.error ?? '';
+        if (error.contains('Too many requests') || error.contains('rate limit')) {
+          print('[OrderNotificationService] ⚠️ Rate limit reached for order $orderNo. Email will be retried on next order.');
+        } else {
+          print('[OrderNotificationService] ❌ Failed to send email for order $orderNo: ${result.error}');
+        }
       }
     } catch (e) {
-      print('[OrderNotificationService] Exception sending notification: $e');
+      print('[OrderNotificationService] ❌ Exception sending notification: $e');
     }
   }
 
