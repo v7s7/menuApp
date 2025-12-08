@@ -1,4 +1,5 @@
 // lib/merchant/main_merchant.dart — FIXED: Unified Firebase init (web + mobile) + Orders tab
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -20,6 +21,7 @@ import '../core/services/order_notification_service.dart';
 import 'screens/login_screen.dart';
 import 'screens/products_screen.dart';
 import 'screens/orders_admin_page.dart';
+import 'screens/settings_page.dart';
 import '../features/analytics/screens/analytics_dashboard_page.dart';
 
 Future<void> main() async {
@@ -123,52 +125,63 @@ class _MerchantShell extends ConsumerStatefulWidget {
 class _MerchantShellState extends ConsumerState<_MerchantShell> {
   int _i = 0;
   final _notificationService = OrderNotificationService();
+  StreamSubscription<DocumentSnapshot>? _settingsSubscription;
 
   @override
   void initState() {
     super.initState();
-    _initializeNotifications();
+    _watchSettingsAndStartNotifications();
   }
 
   @override
   void dispose() {
     _notificationService.stopListening();
+    _settingsSubscription?.cancel();
     super.dispose();
   }
 
-  Future<void> _initializeNotifications() async {
-    try {
-      // Load settings from Firestore
-      final settingsDoc = await FirebaseFirestore.instance
-          .doc('merchants/${widget.merchantId}/branches/${widget.branchId}/config/settings')
-          .get();
+  /// Watch settings document and restart notification service whenever it changes
+  void _watchSettingsAndStartNotifications() {
+    final settingsRef = FirebaseFirestore.instance
+        .doc('merchants/${widget.merchantId}/branches/${widget.branchId}/config/settings');
 
-      final enabled = settingsDoc.data()?['emailNotifications']?['enabled'] as bool? ?? false;
-      final email = settingsDoc.data()?['emailNotifications']?['email'] as String?;
+    _settingsSubscription = settingsRef.snapshots().listen((settingsDoc) async {
+      try {
+        final enabled = settingsDoc.data()?['emailNotifications']?['enabled'] as bool? ?? false;
+        final email = settingsDoc.data()?['emailNotifications']?['email'] as String?;
 
-      if (!enabled || email == null || email.isEmpty) {
-        return;
+        print('[MerchantShell] Settings changed: enabled=$enabled, email=$email');
+
+        // Stop existing service first
+        _notificationService.stopListening();
+
+        if (!enabled || email == null || email.isEmpty) {
+          print('[MerchantShell] Email notifications disabled or email not configured');
+          return;
+        }
+
+        // Load merchant name
+        final brandingDoc = await FirebaseFirestore.instance
+            .doc('merchants/${widget.merchantId}/branches/${widget.branchId}/config/branding')
+            .get();
+        final merchantName = brandingDoc.data()?['title'] as String? ?? 'Your Store';
+
+        // Start listening for new orders
+        _notificationService.startListening(
+          merchantId: widget.merchantId,
+          branchId: widget.branchId,
+          merchantEmail: email,
+          merchantName: merchantName,
+          enabled: enabled,
+        );
+
+        print('[MerchantShell] ✅ Email notifications active for $email');
+      } catch (e) {
+        print('[MerchantShell] ❌ Failed to start notifications: $e');
       }
-
-      // Load merchant name
-      final brandingDoc = await FirebaseFirestore.instance
-          .doc('merchants/${widget.merchantId}/branches/${widget.branchId}/config/branding')
-          .get();
-      final merchantName = brandingDoc.data()?['title'] as String? ?? 'Your Store';
-
-      // Start listening
-      _notificationService.startListening(
-        merchantId: widget.merchantId,
-        branchId: widget.branchId,
-        merchantEmail: email,
-        merchantName: merchantName,
-        enabled: enabled,
-      );
-
-      print('[MerchantShell] Email notifications started for $email');
-    } catch (e) {
-      print('[MerchantShell] Failed to initialize notifications: $e');
-    }
+    }, onError: (error) {
+      print('[MerchantShell] ❌ Settings stream error: $error');
+    });
   }
 
   @override
@@ -183,6 +196,7 @@ class _MerchantShellState extends ConsumerState<_MerchantShell> {
       appBar: _i == 2
           ? null
           : AppBar(
+              automaticallyImplyLeading: false,
               title: Text(_i == 0 ? 'Products' : 'Orders'),
               actions: [
                 IconButton(
@@ -191,7 +205,8 @@ class _MerchantShellState extends ConsumerState<_MerchantShell> {
                   onPressed: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
-                        builder: (_) => const SettingsPage(),
+                        builder: (_) => SettingsPage(),
+                        fullscreenDialog: true,
                       ),
                     );
                   },
@@ -199,26 +214,48 @@ class _MerchantShellState extends ConsumerState<_MerchantShell> {
               ],
             ),
       body: pages[_i],
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _i,
-        onDestinationSelected: (v) => setState(() => _i = v),
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.inventory_2_outlined),
-            selectedIcon: Icon(Icons.inventory_2),
-            label: 'Products',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.receipt_long_outlined),
-            selectedIcon: Icon(Icons.receipt_long),
-            label: 'Orders',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.analytics_outlined),
-            selectedIcon: Icon(Icons.analytics),
-            label: 'Analytics',
-          ),
-        ],
+      bottomNavigationBar: StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection('merchants/${widget.merchantId}/branches/${widget.branchId}/orders')
+            .where('status', isEqualTo: 'pending')
+            .snapshots(),
+        builder: (context, snapshot) {
+          final pendingCount = snapshot.hasData ? snapshot.data!.docs.length : 0;
+
+          return NavigationBar(
+            selectedIndex: _i,
+            onDestinationSelected: (v) => setState(() => _i = v),
+            destinations: [
+              const NavigationDestination(
+                icon: Icon(Icons.inventory_2_outlined),
+                selectedIcon: Icon(Icons.inventory_2),
+                label: 'Products',
+              ),
+              NavigationDestination(
+                icon: Badge(
+                  isLabelVisible: pendingCount > 0,
+                  label: Text(pendingCount.toString()),
+                  backgroundColor: Colors.red,
+                  textColor: Colors.white,
+                  child: const Icon(Icons.receipt_long_outlined),
+                ),
+                selectedIcon: Badge(
+                  isLabelVisible: pendingCount > 0,
+                  label: Text(pendingCount.toString()),
+                  backgroundColor: Colors.red,
+                  textColor: Colors.white,
+                  child: const Icon(Icons.receipt_long),
+                ),
+                label: 'Orders',
+              ),
+              const NavigationDestination(
+                icon: Icon(Icons.analytics_outlined),
+                selectedIcon: Icon(Icons.analytics),
+                label: 'Analytics',
+              ),
+            ],
+          );
+        },
       ),
     );
   }

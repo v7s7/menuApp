@@ -96,7 +96,15 @@ class _BrandingAdminPageState extends ConsumerState<BrandingAdminPage> {
     final menuUrl = '$kAppHost/#/?m=$m&b=$br';
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Branding Settings')),
+      appBar: AppBar(
+        automaticallyImplyLeading: false,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          tooltip: 'Back',
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        title: const Text('Branding Settings'),
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
