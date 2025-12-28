@@ -29,6 +29,9 @@ dependencies:
   # Currency formatting (3dp BHD)
   intl: ^0.19.0
 
+  # Phone input with country picker (flags handled by the package)
+  intl_phone_field: ^3.2.0
+
   # Charts for analytics
   fl_chart: ^0.69.0
 

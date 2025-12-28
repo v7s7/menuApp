@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:intl_phone_field/intl_phone_field.dart';
+import 'package:intl_phone_field/phone_number.dart';
 
 import '../data/loyalty_models.dart';
 import '../data/loyalty_service.dart';
@@ -31,22 +33,27 @@ class LoyaltyCheckoutWidget extends ConsumerStatefulWidget {
 }
 
 class _LoyaltyCheckoutWidgetState extends ConsumerState<LoyaltyCheckoutWidget> {
-  final _countryCodeController = TextEditingController(text: '+973');
+  // We keep the full E.164 here (ex: +97312345678)
+  String _e164Phone = '';
+
+  // Keep these for validation + profile lookup + UI helpers
+  String _selectedDialCode = '+973';
+  int _maxDigits = 8;
+
   final _phoneNumberController = TextEditingController();
   final _carPlateController = TextEditingController();
   final _pointsController = TextEditingController(text: '0');
 
   @override
   void dispose() {
-    _countryCodeController.dispose();
     _phoneNumberController.dispose();
     _carPlateController.dispose();
     _pointsController.dispose();
     super.dispose();
   }
 
-  int _getMaxDigits(String countryCode) {
-    switch (countryCode) {
+  int _getMaxDigitsByDialCode(String dialCode) {
+    switch (dialCode) {
       case '+973': // Bahrain
         return 8;
       case '+966': // Saudi Arabia
@@ -64,8 +71,6 @@ class _LoyaltyCheckoutWidgetState extends ConsumerState<LoyaltyCheckoutWidget> {
       loading: () => const SizedBox(),
       error: (e, st) => const SizedBox(),
       data: (settings) {
-        // ALWAYS show phone and car plate (for car identification)
-        // Only show loyalty points section if enabled
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -84,50 +89,67 @@ class _LoyaltyCheckoutWidgetState extends ConsumerState<LoyaltyCheckoutWidget> {
             ),
             const SizedBox(height: 16),
 
-            // Phone Number Input (ALWAYS REQUIRED)
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Country Code
-                SizedBox(
-                  width: 100,
-                  child: TextField(
-                    controller: _countryCodeController,
-                    decoration: const InputDecoration(
-                      labelText: 'Code',
-                      prefixIcon: Icon(Icons.flag, size: 20),
-                      border: OutlineInputBorder(),
-                    ),
-                    keyboardType: TextInputType.phone,
-                    onChanged: (value) {
-                      setState(() {}); // Rebuild to update max digits
-                      _updateCheckoutData(settings);
-                    },
-                  ),
-                ),
-                const SizedBox(width: 8),
-                // Phone Number
-                Expanded(
-                  child: TextField(
-                    controller: _phoneNumberController,
-                    decoration: InputDecoration(
-                      labelText: 'Phone Number',
-                      hintText: '${'X' * _getMaxDigits(_countryCodeController.text)}',
-                      prefixIcon: const Icon(Icons.phone),
-                      border: const OutlineInputBorder(),
-                      helperText: '${_getMaxDigits(_countryCodeController.text)} digits',
-                    ),
-                    keyboardType: TextInputType.phone,
-                    maxLength: _getMaxDigits(_countryCodeController.text),
-                    onChanged: (value) {
-                      final fullPhone = '${_countryCodeController.text}${_phoneNumberController.text}';
-                      ref.read(checkoutPhoneProvider.notifier).state = fullPhone;
-                      _updateCheckoutData(settings);
-                    },
-                  ),
-                ),
-              ],
+            // Phone Number Input (WITH FLAG + COUNTRY PICKER)
+            IntlPhoneField(
+              controller: _phoneNumberController,
+              initialCountryCode: 'BH',
+              showCountryFlag: true,
+              showDropdownIcon: true,
+              dropdownIconPosition: IconPosition.trailing,
+              flagsButtonPadding: const EdgeInsets.only(left: 8, right: 8),
+              decoration: InputDecoration(
+                labelText: 'Phone Number',
+                hintText: '${'X' * _maxDigits}',
+                prefixIcon: const Icon(Icons.phone),
+                border: const OutlineInputBorder(),
+                helperText: '$_maxDigits digits',
+              ),
+              keyboardType: TextInputType.phone,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              autovalidateMode: AutovalidateMode.onUserInteraction,
+              validator: (PhoneNumber? phone) {
+                final digits = (phone?.number ?? '').replaceAll(RegExp(r'\D'), '');
+                final dial = phone?.countryCode ?? _selectedDialCode;
+                final max = _getMaxDigitsByDialCode(dial);
+                if (digits.isEmpty) return 'Phone is required';
+                if (digits.length != max) return 'Enter exactly $max digits';
+                return null;
+              },
+              onCountryChanged: (country) {
+                final dial = '+${country.dialCode}';
+                final max = _getMaxDigitsByDialCode(dial);
+
+                setState(() {
+                  _selectedDialCode = dial;
+                  _maxDigits = max;
+                });
+
+                // Rebuild E.164 from current typed digits
+                final digits = _phoneNumberController.text.replaceAll(RegExp(r'\D'), '');
+                _e164Phone = digits.isEmpty ? '' : '$_selectedDialCode$digits';
+
+                ref.read(checkoutPhoneProvider.notifier).state = _e164Phone;
+                _updateCheckoutData(settings);
+              },
+              onChanged: (phone) {
+                // phone.completeNumber usually gives E.164 like +973xxxxxxxx
+                // But we enforce digits-only and our maxDigits rule above.
+                final digits = phone.number.replaceAll(RegExp(r'\D'), '');
+                final dial = phone.countryCode;
+                final max = _getMaxDigitsByDialCode(dial);
+
+                setState(() {
+                  _selectedDialCode = dial;
+                  _maxDigits = max;
+                });
+
+                _e164Phone = digits.isEmpty ? '' : '$dial$digits';
+
+                ref.read(checkoutPhoneProvider.notifier).state = _e164Phone;
+                _updateCheckoutData(settings);
+              },
             ),
+
             const SizedBox(height: 12),
 
             // Car Plate Input (Required)
@@ -140,14 +162,13 @@ class _LoyaltyCheckoutWidgetState extends ConsumerState<LoyaltyCheckoutWidget> {
                 border: OutlineInputBorder(),
               ),
               textCapitalization: TextCapitalization.characters,
-              maxLength: 7, // Max 7 digits as per user requirement
+              maxLength: 7,
               onChanged: (value) {
                 ref.read(checkoutCarPlateProvider.notifier).state = value;
                 _updateCheckoutData(settings);
               },
             ),
 
-            // Always show loyalty profile if enabled (appears at bottom immediately)
             if (settings.enabled) ...[
               const SizedBox(height: 16),
               _buildCustomerProfileCard(settings),
@@ -159,10 +180,9 @@ class _LoyaltyCheckoutWidgetState extends ConsumerState<LoyaltyCheckoutWidget> {
   }
 
   Widget _buildCustomerProfileCard(LoyaltySettings settings) {
-    final phone = '${_countryCodeController.text}${_phoneNumberController.text}'.trim();
+    final phone = _e164Phone.trim();
 
-    // Show placeholder message if phone is not entered yet
-    if (phone.isEmpty || _phoneNumberController.text.isEmpty) {
+    if (phone.isEmpty) {
       return Card(
         color: Colors.purple.withOpacity(0.05),
         child: Padding(
@@ -199,14 +219,10 @@ class _LoyaltyCheckoutWidgetState extends ConsumerState<LoyaltyCheckoutWidget> {
       data: (profile) {
         final currencyFormat = NumberFormat.currency(symbol: 'BHD ', decimalDigits: 3);
 
-        // Calculate points that will be earned from this order
         final pointsToEarn = settings.calculatePointsEarned(widget.orderTotal);
-
-        // Calculate current + future points
         final currentPoints = profile?.points ?? 0;
         final totalPointsAfterOrder = currentPoints + pointsToEarn;
 
-        // Calculate max usable points
         final maxUsablePoints = settings.calculateMaxUsablePoints(widget.orderTotal);
         final canUsePoints = currentPoints >= settings.minPointsToRedeem &&
             widget.orderTotal >= settings.minOrderAmount;
@@ -218,7 +234,6 @@ class _LoyaltyCheckoutWidgetState extends ConsumerState<LoyaltyCheckoutWidget> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Current Points
                 Row(
                   children: [
                     Container(
@@ -269,7 +284,6 @@ class _LoyaltyCheckoutWidgetState extends ConsumerState<LoyaltyCheckoutWidget> {
                   ],
                 ),
 
-                // Points to earn from this order
                 if (pointsToEarn > 0) ...[
                   const SizedBox(height: 12),
                   Container(
@@ -305,7 +319,6 @@ class _LoyaltyCheckoutWidgetState extends ConsumerState<LoyaltyCheckoutWidget> {
                   ),
                 ],
 
-                // Redeem points section
                 if (canUsePoints) ...[
                   const SizedBox(height: 16),
                   const Divider(),
@@ -317,8 +330,6 @@ class _LoyaltyCheckoutWidgetState extends ConsumerState<LoyaltyCheckoutWidget> {
                         ),
                   ),
                   const SizedBox(height: 12),
-
-                  // Points input
                   TextField(
                     controller: _pointsController,
                     decoration: InputDecoration(
@@ -355,8 +366,6 @@ class _LoyaltyCheckoutWidgetState extends ConsumerState<LoyaltyCheckoutWidget> {
                     },
                   ),
                   const SizedBox(height: 12),
-
-                  // Discount preview
                   _buildDiscountPreview(settings, currentPoints, maxUsablePoints),
                 ] else if (currentPoints < settings.minPointsToRedeem) ...[
                   const SizedBox(height: 16),
@@ -465,7 +474,7 @@ class _LoyaltyCheckoutWidgetState extends ConsumerState<LoyaltyCheckoutWidget> {
   }
 
   void _updateCheckoutData(LoyaltySettings settings) {
-    final phone = '${_countryCodeController.text}${_phoneNumberController.text}'.trim();
+    final phone = _e164Phone.trim();
     final carPlate = _carPlateController.text.trim();
     final pointsToUse = int.tryParse(_pointsController.text) ?? 0;
     final discount = settings.calculateDiscount(pointsToUse);
